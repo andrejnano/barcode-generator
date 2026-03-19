@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barcode Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bwip-js/4.5.1/bwip-js-min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f4; color: #1a1a1a; line-height: 1.5; }
+  .container { max-width: 680px; margin: 0 auto; padding: 48px 24px 64px; }
+
+  /* Header */
+  header { margin-bottom: 40px; }
+  h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .subtitle { color: #666; font-size: 0.92rem; line-height: 1.6; }
+  .privacy-badge { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 0.78rem; color: #16a34a; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 100px; padding: 3px 10px 3px 8px; }
+  .privacy-badge svg { flex-shrink: 0; }
+
+  /* Steps */
+  .step { position: relative; margin-bottom: 8px; }
+  .step-header { display: flex; align-items: center; gap: 12px; padding: 18px 24px; background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; cursor: default; }
+  .step.active .step-header { border-radius: 10px 10px 0 0; border-bottom-color: transparent; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #e5e5e5; color: #999; font-size: 0.82rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }
+  .step.active .step-num { background: #1a1a1a; color: #fff; }
+  .step.done .step-num { background: #16a34a; color: #fff; }
+  .step-label { font-size: 0.92rem; font-weight: 600; color: #999; transition: color 0.2s; }
+  .step.active .step-label { color: #1a1a1a; }
+  .step.done .step-label { color: #555; }
+  .step-meta { margin-left: auto; font-size: 0.8rem; color: #999; }
+
+  .step-body { background: #fff; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px; padding: 4px 24px 24px; }
+
+  /* Step 1: Data input */
+  .columns-help { margin-bottom: 16px; }
+  .columns-help p { font-size: 0.85rem; color: #666; margin-bottom: 12px; }
+  .col-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .col-item { display: flex; align-items: baseline; gap: 10px; font-size: 0.82rem; }
+  .col-tag { font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; font-weight: 600; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em; }
+  .col-tag.required { background: #fef3c7; color: #92400e; }
+  .col-tag.optional { background: #f0f0f0; color: #888; }
+  .col-name { font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; color: #1a1a1a; flex-shrink: 0; }
+  .col-explain { color: #999; font-size: 0.8rem; }
+
+  textarea { width: 100%; min-height: 120px; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.82rem; resize: vertical; line-height: 1.6; transition: border-color 0.15s; }
+  textarea:focus { outline: none; border-color: #888; }
+  textarea::placeholder { color: #bbb; }
+
+  .input-alt { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+  .or-divider { color: #ccc; font-size: 0.78rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .upload-btn { padding: 7px 14px; background: #fff; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; font-size: 0.82rem; color: #555; transition: all 0.15s; }
+  .upload-btn:hover { background: #f8f8f8; border-color: #bbb; }
+  .file-name { color: #888; font-size: 0.82rem; }
+  .example-link { font-size: 0.78rem; color: #888; margin-left: auto; cursor: pointer; border: none; background: none; text-decoration: underline; text-underline-offset: 2px; }
+  .example-link:hover { color: #555; }
+
+  /* Step 2: Review */
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th { text-align: left; padding: 8px 10px; background: #fafafa; border-bottom: 2px solid #eee; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: #999; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  .table-wrap { overflow-x: auto; border: 1px solid #eee; border-radius: 6px; margin-bottom: 12px; }
+  .table-wrap table { margin: 0; }
+  .table-wrap th { background: #f8f8f7; }
+
+  .review-stats { display: flex; gap: 16px; font-size: 0.82rem; color: #666; flex-wrap: wrap; }
+  .review-stats span { display: inline-flex; align-items: center; gap: 4px; }
+  .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .stat-dot.qr { background: #3b82f6; }
+  .stat-dot.ean { background: #8b5cf6; }
+
+  .warn { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 10px 14px; font-size: 0.82rem; color: #92400e; margin-top: 10px; line-height: 1.6; }
+
+  /* Output preview */
+  .output-preview { margin-top: 16px; }
+  .output-label { font-size: 0.78rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+  .file-tree { background: #fafaf9; border: 1px solid #e8e8e6; border-radius: 8px; padding: 14px 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.75rem; line-height: 1.5; color: #555; }
+  .file-tree div { padding: 2px 0; }
+  .file-tree .folder { color: #1a1a1a; font-weight: 600; }
+  .file-tree .qr-file { color: #3b82f6; }
+  .file-tree .ean-file { color: #8b5cf6; }
+  .file-tree .ellipsis { color: #bbb; font-style: italic; font-family: -apple-system, sans-serif; font-size: 0.78rem; }
+  .file-tree .indent-1 { padding-left: 16px; }
+  .file-tree .indent-2 { padding-left: 32px; }
+
+  /* Step 3: Settings + Generate */
+  .settings-intro { font-size: 0.85rem; color: #888; margin-bottom: 16px; }
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .setting { background: #fafaf9; border: 1px solid #eee; border-radius: 8px; padding: 14px; }
+  .setting-label { font-size: 0.82rem; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
+  .setting-why { font-size: 0.75rem; color: #999; margin-bottom: 8px; line-height: 1.4; }
+  .setting select { width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; background: #fff; color: #1a1a1a; }
+  .setting select:focus { outline: none; border-color: #888; }
+
+  .generate-btn { width: 100%; padding: 15px; background: #1a1a1a; color: #fff; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.15s; letter-spacing: -0.01em; }
+  .generate-btn:hover:not(:disabled) { background: #333; }
+  .generate-btn:disabled { background: #d4d4d4; cursor: not-allowed; }
+
+  .progress { margin-top: 14px; }
+  .progress-text { font-size: 0.85rem; color: #666; }
+  .progress-bar { height: 4px; background: #e8e8e8; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; background: #1a1a1a; transition: width 0.2s; border-radius: 2px; }
+  .done { color: #16a34a; font-weight: 600; }
+  .error { color: #dc2626; font-size: 0.85rem; margin-top: 10px; }
+  .hidden { display: none; }
+
+  /* Footer */
+  footer { text-align: center; margin-top: 32px; font-size: 0.78rem; color: #bbb; line-height: 1.6; }
+  footer a { color: #999; }
+
+  @media (max-width: 520px) {
+    .settings-grid { grid-template-columns: 1fr; }
+    .input-alt { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>Barcode Generator</h1>
+    <p class="subtitle">Generate QR codes and EAN-13 barcodes for all your products at once. Just paste your product list and download everything as a ZIP.</p>
+    <div class="privacy-badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      Runs entirely in your browser — no data is uploaded
+    </div>
+  </header>
+
+  <!-- Step 1 -->
+  <div class="step active" id="step1">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-label">Add your product data</div>
+    </div>
+    <div class="step-body">
+      <div class="columns-help">
+        <p>Paste your spreadsheet data below, or upload a CSV file. Your columns:</p>
+        <ul class="col-list">
+          <li class="col-item">
+            <span class="col-tag required">required</span>
+            <span class="col-name">product_name</span>
+            <span class="col-explain">Used as the file name in the ZIP</span>
+          </li>
+          <li class="col-item">
+            <span class="col-tag optional">optional</span>
+            <span class="col-name">qr_data</span>
+            <span class="col-explain">URL or text to encode as QR code</span>
+          </li>
+          <li class="col-item">
+            <span class="col-tag optional">optional</span>
+            <span class="col-name">ean13</span>
+            <span class="col-explain">12 or 13-digit EAN (check digit auto-calculated)</span>
+          </li>
+        </ul>
+      </div>
+      <textarea id="csvInput" placeholder="product_name,qr_data,ean13&#10;Vitamin C Serum,https://example.com/product/10234,5901234123457&#10;Rose Body Oil,https://example.com/product/10235,4006381333931"></textarea>
+      <div class="input-alt">
+        <label class="upload-btn">
+          Upload CSV
+          <input type="file" accept=".csv,.tsv,.txt" id="fileInput" style="display:none" onchange="handleFile(event)">
+        </label>
+        <span class="file-name" id="fileName"></span>
+        <span class="or-divider">or paste above</span>
+        <button class="example-link" onclick="loadExample()">Load example</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step" id="step2">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-label">Review what will be generated</div>
+      <div class="step-meta" id="step2meta"></div>
+    </div>
+    <div class="step-body hidden" id="step2body">
+      <div class="table-wrap"><table id="previewTable"></table></div>
+      <div class="review-stats" id="reviewStats"></div>
+      <div class="warn hidden" id="warnings"></div>
+      <div class="output-preview" id="outputPreview"></div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step" id="step3">
+    <div class="step-header">
+      <div class="step-num">3</div>
+      <div class="step-label">Adjust settings &amp; download</div>
+    </div>
+    <div class="step-body hidden" id="step3body">
+      <p class="settings-intro">Defaults work well for most use cases. Only change these if you have specific needs.</p>
+      <div class="settings-grid">
+        <div class="setting">
+          <div class="setting-label">ZIP file organization</div>
+          <div class="setting-why">Grouped creates a folder per product. Flat puts all files in one place.</div>
+          <select id="zipOrg" onchange="buildOutputPreview(parsedRows)">
+            <option value="flat">Flat — all files together</option>
+            <option value="grouped" selected>Grouped — folder per product</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">Include IDs in filenames</div>
+          <div class="setting-why">Adds EAN and product ID from URL to filenames for easy searching.</div>
+          <select id="includeIds" onchange="buildOutputPreview(parsedRows)">
+            <option value="true" selected>Yes (recommended)</option>
+            <option value="false">No — name only</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">Output format</div>
+          <div class="setting-why">SVG is vector (scales perfectly for print). PNG is raster (works everywhere).</div>
+          <select id="outputFormat" onchange="buildOutputPreview(parsedRows)">
+            <option value="both" selected>SVG + PNG (recommended)</option>
+            <option value="svg">SVG only</option>
+            <option value="png">PNG only</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">QR code image size</div>
+          <div class="setting-why">Larger = sharper when printed big. Medium works for most packaging.</div>
+          <select id="qrScale">
+            <option value="4">Small (~200px)</option>
+            <option value="8" selected>Medium (~400px)</option>
+            <option value="12">Large (~600px)</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">QR damage resistance</div>
+          <div class="setting-why">If the QR code might get scratched or partially covered, use High.</div>
+          <select id="qrEclevel">
+            <option value="L">Low — saves space</option>
+            <option value="M">Medium — balanced</option>
+            <option value="Q">High — some damage OK</option>
+            <option value="H" selected>Max — best for print</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">Barcode image size</div>
+          <div class="setting-why">Match to your packaging dimensions. Medium fits most labels.</div>
+          <select id="eanScale">
+            <option value="2">Small (~200 x 140px)</option>
+            <option value="4" selected>Medium (~400 x 280px)</option>
+            <option value="6">Large (~600 x 420px)</option>
+          </select>
+        </div>
+        <div class="setting">
+          <div class="setting-label">Show numbers under barcode</div>
+          <div class="setting-why">The 13-digit number printed below the barcode lines. Usually required for retail.</div>
+          <select id="eanText">
+            <option value="true" selected>Yes (recommended)</option>
+            <option value="false">No</option>
+          </select>
+        </div>
+      </div>
+      <button class="generate-btn" id="generateBtn" onclick="generate()" disabled>Generate &amp; Download ZIP</button>
+      <div class="hidden" id="progressArea">
+        <div class="progress">
+          <div class="progress-text" id="progressText">Generating...</div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="error hidden" id="errorMsg"></div>
+    </div>
+  </div>
+
+  <footer>
+    EAN-13 numbers must be registered with <a href="https://www.gs1sk.org" target="_blank">GS1</a>. Don't use made-up numbers for retail products.
+  </footer>
+
+</div>
+
+<script>
+let parsedRows = [];
+
+function loadExample() {
+  const text = 'product_name,qr_data,ean13\nVitamin C Serum,https://example.com/product/10234,5901234123457\nRose Body Oil,https://example.com/product/10235,4006381333931\nHyaluronic Cream,,8588000000128';
+  document.getElementById('csvInput').value = text;
+  parseCSV(text);
+}
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById('fileName').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    document.getElementById('csvInput').value = ev.target.result;
+    parseCSV(ev.target.result);
+  };
+  reader.readAsText(file);
+}
+
+document.getElementById('csvInput').addEventListener('input', function() {
+  if (this.value.trim()) parseCSV(this.value);
+  else resetSteps();
+});
+
+function parseCSV(text) {
+  const result = Papa.parse(text.trim(), { header: true, skipEmptyLines: true });
+  const rows = result.data;
+
+  if (!rows.length) { resetSteps(); return; }
+
+  const headers = Object.keys(rows[0]).map(h => h.trim().toLowerCase());
+  const nameCol = headers.find(h => h.includes('name') || h.includes('product'));
+  const qrCol = headers.find(h => h.includes('qr') || h.includes('url') || h.includes('link'));
+  const eanCol = headers.find(h => h.includes('ean') || h.includes('barcode') || h.includes('gtin'));
+
+  if (!nameCol) {
+    showError('Could not find a product name column. Make sure your first row has a header like "product_name".');
+    resetSteps();
+    return;
+  }
+
+  clearError();
+  const originalHeaders = Object.keys(rows[0]);
+  const nameKey = originalHeaders.find(h => h.trim().toLowerCase() === nameCol);
+  const qrKey = qrCol ? originalHeaders.find(h => h.trim().toLowerCase() === qrCol) : null;
+  const eanKey = eanCol ? originalHeaders.find(h => h.trim().toLowerCase() === eanCol) : null;
+
+  const warnings = [];
+  parsedRows = rows.map((r, i) => {
+    const name = (r[nameKey] || '').trim();
+    const qr = qrKey ? (r[qrKey] || '').trim() : '';
+    let ean = eanKey ? (r[eanKey] || '').trim().replace(/\s/g, '') : '';
+
+    if (ean) {
+      const result = normalizeEAN(ean);
+      if (result.autoFixed === 'calculated') {
+        warnings.push(`Row ${i + 1} ("${name}"): 12 digits entered — check digit added automatically (${result.ean})`);
+      } else if (result.autoFixed === 'corrected') {
+        warnings.push(`Row ${i + 1} ("${name}"): Check digit was wrong — auto-corrected to ${result.ean}`);
+      }
+      ean = result.ean;
+    }
+
+    return { name, qr, ean };
+  }).filter(r => r.name);
+
+  parsedRows.forEach((r, i) => {
+    if (r.ean && !/^\d{13}$/.test(r.ean)) {
+      warnings.push(`Row ${i + 1} ("${r.name}"): EAN "${r.ean}" is not 12 or 13 digits — skipped`);
+    }
+    if (!r.qr && !r.ean) {
+      warnings.push(`Row ${i + 1} ("${r.name}"): No QR or EAN data — nothing to generate`);
+    }
+    if (r.qr && !extractProductId(r.qr)) {
+      warnings.push(`Row ${i + 1} ("${r.name}"): Could not extract a product ID from the URL`);
+    }
+    if (!r.qr) {
+      warnings.push(`Row ${i + 1} ("${r.name}"): No URL — product ID will not be included in filenames`);
+    }
+  });
+
+  showReview(parsedRows, warnings);
+}
+
+function showReview(rows, warnings) {
+  // Activate steps 2 and 3
+  activateStep('step1', 'done');
+  activateStep('step2', 'active');
+  activateStep('step3', 'active');
+  document.getElementById('step2body').classList.remove('hidden');
+  document.getElementById('step3body').classList.remove('hidden');
+
+  // Preview table
+  const table = document.getElementById('previewTable');
+  let html = '<tr><th>ID</th><th>Product</th><th>QR</th><th>EAN-13</th></tr>';
+  const showRows = rows.slice(0, 8);
+  showRows.forEach((r, i) => {
+    const pid = getProductId(r);
+    const idCell = pid
+      ? `<span style="font-family:'SF Mono','Fira Code',monospace;font-size:0.78rem">${esc(pid)}</span>`
+      : '<span style="color:#f59e0b" title="No product ID found in URL">--</span>';
+    const eanStyle = r.ean && !/^\d{13}$/.test(r.ean) ? ' style="color:#dc2626"' : '';
+    const qrCell = r.qr ? '<span style="color:#3b82f6">Yes</span>' : '<span style="color:#ccc">--</span>';
+    const eanCell = r.ean ? `<span${eanStyle}>${esc(r.ean)}</span>` : '<span style="color:#ccc">--</span>';
+    html += `<tr><td>${idCell}</td><td>${esc(r.name)}</td><td>${qrCell}</td><td>${eanCell}</td></tr>`;
+  });
+  if (rows.length > 8) {
+    html += `<tr><td colspan="4" style="color:#999; text-align:center; font-style:italic;">+ ${rows.length - 8} more products</td></tr>`;
+  }
+  table.innerHTML = html;
+
+  // Stats
+  const qrCount = rows.filter(r => r.qr).length;
+  const eanCount = rows.filter(r => r.ean && /^\d{13}$/.test(r.ean)).length;
+  const fmtCount = getFormats().length;
+  const totalFiles = (qrCount + eanCount) * fmtCount;
+  document.getElementById('step2meta').textContent = `${rows.length} products`;
+  let statsHtml = `<span>${rows.length} product${rows.length !== 1 ? 's' : ''}</span>`;
+  if (qrCount) statsHtml += `<span><span class="stat-dot qr"></span>${qrCount} QR code${qrCount !== 1 ? 's' : ''}</span>`;
+  if (eanCount) statsHtml += `<span><span class="stat-dot ean"></span>${eanCount} barcode${eanCount !== 1 ? 's' : ''}</span>`;
+  statsHtml += `<span>${totalFiles} file${totalFiles !== 1 ? 's' : ''} total</span>`;
+  document.getElementById('reviewStats').innerHTML = statsHtml;
+
+  // Warnings
+  const warnEl = document.getElementById('warnings');
+  if (warnings.length) {
+    warnEl.classList.remove('hidden');
+    warnEl.innerHTML = warnings.map(w => esc(w)).join('<br>');
+  } else {
+    warnEl.classList.add('hidden');
+  }
+
+  // Output preview (file tree)
+  buildOutputPreview(rows);
+
+  const hasValid = rows.some(r => r.qr || (r.ean && /^\d{13}$/.test(r.ean)));
+  document.getElementById('generateBtn').disabled = !hasValid;
+}
+
+function getFormats() {
+  const fmt = document.getElementById('outputFormat').value;
+  const formats = [];
+  if (fmt === 'both' || fmt === 'svg') formats.push('svg');
+  if (fmt === 'both' || fmt === 'png') formats.push('png');
+  return formats;
+}
+
+function buildOutputPreview(rows) {
+  const container = document.getElementById('outputPreview');
+  if (!rows || !rows.length) return;
+  const previewRows = rows.slice(0, 2);
+  const grouped = document.getElementById('zipOrg').value === 'grouped';
+  const formats = getFormats();
+
+  let html = '<div class="output-label">Your ZIP will contain</div><div class="file-tree">';
+  html += '<div class="folder">barcodes.zip</div>';
+
+  previewRows.forEach(r => {
+    if (grouped) {
+      const pid = getProductId(r);
+      const safe = sanitizeFilename(r.name);
+      const folder = pid ? `${pid}_${safe}` : safe;
+      html += `<div class="folder indent-1">${folder}/</div>`;
+      for (const ext of formats) {
+        if (r.qr) html += `<div class="qr-file indent-2">${buildFilePath(r, 'qr', ext).split('/').pop()}</div>`;
+        if (r.ean && /^\d{13}$/.test(r.ean)) html += `<div class="ean-file indent-2">${buildFilePath(r, 'ean', ext).split('/').pop()}</div>`;
+      }
+    } else {
+      for (const ext of formats) {
+        if (r.qr) html += `<div class="qr-file indent-1">${buildFilePath(r, 'qr', ext)}</div>`;
+        if (r.ean && /^\d{13}$/.test(r.ean)) html += `<div class="ean-file indent-1">${buildFilePath(r, 'ean', ext)}</div>`;
+      }
+    }
+  });
+
+  if (rows.length > 2) {
+    const remaining = rows.length - 2;
+    html += `<div class="ellipsis indent-1">... and files for ${remaining} more product${remaining !== 1 ? 's' : ''}</div>`;
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function activateStep(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove('active', 'done');
+  if (state) el.classList.add(state);
+}
+
+function resetSteps() {
+  activateStep('step1', 'active');
+  activateStep('step2', '');
+  activateStep('step3', '');
+  document.getElementById('step2body').classList.add('hidden');
+  document.getElementById('step3body').classList.add('hidden');
+  document.getElementById('step2meta').textContent = '';
+  document.getElementById('generateBtn').disabled = true;
+  parsedRows = [];
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function sanitizeFilename(name) {
+  return name.replace(/[^a-zA-Z0-9_\-. ]/g, '').replace(/\s+/g, '-').substring(0, 60);
+}
+
+function extractProductId(url) {
+  try {
+    const path = new URL(url).pathname;
+    const segments = path.split('/').filter(Boolean);
+    const last = segments[segments.length - 1];
+    if (last && /^[a-zA-Z0-9_-]{1,30}$/.test(last)) return last;
+  } catch {}
+  return '';
+}
+
+function getProductId(row) {
+  if (row.qr) {
+    const pid = extractProductId(row.qr);
+    if (pid) return pid;
+  }
+  return '';
+}
+
+function buildFilePath(row, type, ext) {
+  const safeName = sanitizeFilename(row.name);
+  const includeIds = document.getElementById('includeIds').value === 'true';
+  const grouped = document.getElementById('zipOrg').value === 'grouped';
+  const pid = getProductId(row);
+  const suffix = type === 'qr' ? '_qr' : '_ean13';
+  const extension = ext || 'png';
+
+  let filename;
+  if (includeIds && pid) {
+    filename = `${pid}_${safeName}${suffix}.${extension}`;
+  } else if (includeIds && type === 'ean' && row.ean) {
+    filename = `${row.ean}_${safeName}${suffix}.${extension}`;
+  } else {
+    filename = `${safeName}${suffix}.${extension}`;
+  }
+
+  if (grouped) {
+    const folder = pid ? `${pid}_${safeName}` : safeName;
+    return `${folder}/${filename}`;
+  }
+  return filename;
+}
+
+function ean13CheckDigit(first12) {
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(first12[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  return (10 - (sum % 10)) % 10;
+}
+
+function normalizeEAN(raw) {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 12) {
+    return { ean: digits + ean13CheckDigit(digits), autoFixed: 'calculated' };
+  }
+  if (digits.length === 13) {
+    const expected = ean13CheckDigit(digits.substring(0, 12));
+    if (parseInt(digits[12]) !== expected) {
+      return { ean: digits.substring(0, 12) + expected, autoFixed: 'corrected' };
+    }
+    return { ean: digits, autoFixed: null };
+  }
+  return { ean: raw, autoFixed: null };
+}
+
+async function renderToCanvas(options) {
+  const canvas = document.createElement('canvas');
+  await bwipjs.toCanvas(canvas, options);
+  return canvas;
+}
+
+async function generate() {
+  const btn = document.getElementById('generateBtn');
+  const progressArea = document.getElementById('progressArea');
+  const progressText = document.getElementById('progressText');
+  const progressFill = document.getElementById('progressFill');
+
+  btn.disabled = true;
+  progressArea.classList.remove('hidden');
+  clearError();
+
+  const zip = new JSZip();
+  const total = parsedRows.filter(r => r.qr || r.ean).length;
+  let done = 0;
+
+  for (const row of parsedRows) {
+    const safeName = sanitizeFilename(row.name);
+    if (!safeName) continue;
+
+    const formats = getFormats();
+    try {
+      if (row.qr) {
+        const qrOpts = {
+          bcid: 'qrcode',
+          text: row.qr,
+          scale: parseInt(document.getElementById('qrScale').value),
+          eclevel: document.getElementById('qrEclevel').value,
+          padding: 2,
+        };
+        if (formats.includes('png')) {
+          const canvas = await renderToCanvas(qrOpts);
+          const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+          zip.file(buildFilePath(row, 'qr', 'png'), blob);
+        }
+        if (formats.includes('svg')) {
+          const svg = bwipjs.toSVG(qrOpts);
+          zip.file(buildFilePath(row, 'qr', 'svg'), svg);
+        }
+      }
+
+      if (row.ean && /^\d{13}$/.test(row.ean)) {
+        const eanOpts = {
+          bcid: 'ean13',
+          text: row.ean,
+          scale: parseInt(document.getElementById('eanScale').value),
+          height: 15,
+          includetext: document.getElementById('eanText').value === 'true',
+          textxalign: 'center',
+        };
+        if (formats.includes('png')) {
+          const canvas = await renderToCanvas(eanOpts);
+          const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+          zip.file(buildFilePath(row, 'ean', 'png'), blob);
+        }
+        if (formats.includes('svg')) {
+          const svg = bwipjs.toSVG(eanOpts);
+          zip.file(buildFilePath(row, 'ean', 'svg'), svg);
+        }
+      }
+    } catch (err) {
+      console.error(`Error generating for "${row.name}":`, err);
+      showError(`Failed on "${row.name}": ${err.message}`);
+    }
+
+    done++;
+    const pct = Math.round((done / total) * 100);
+    progressFill.style.width = pct + '%';
+    progressText.textContent = `Generating... ${done}/${total}`;
+
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  progressText.innerHTML = '<span class="done">Done!</span> Preparing ZIP...';
+
+  const content = await zip.generateAsync({ type: 'blob' });
+  saveAs(content, 'barcodes.zip');
+
+  progressText.innerHTML = '<span class="done">ZIP downloaded</span>';
+  btn.disabled = false;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+function clearError() {
+  document.getElementById('errorMsg').classList.add('hidden');
+}
+</script>
+</body>
+</html>
