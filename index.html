@@ -154,9 +154,14 @@
             <span class="col-name">ean13</span>
             <span class="col-explain">12 or 13-digit EAN (check digit auto-calculated)</span>
           </li>
+          <li class="col-item">
+            <span class="col-tag optional">optional</span>
+            <span class="col-name">category</span>
+            <span class="col-explain">Groups products into category folders in the ZIP</span>
+          </li>
         </ul>
       </div>
-      <textarea id="csvInput" placeholder="product_name,qr_data,ean13&#10;Vitamin C Serum,https://example.com/product/10234,5901234123457&#10;Rose Body Oil,https://example.com/product/10235,4006381333931"></textarea>
+      <textarea id="csvInput" placeholder="product_name,category,qr_data,ean13&#10;Vitamin C Serum,Skincare,https://example.com/product/10234,5901234123457&#10;Rose Body Oil,Body Care,https://example.com/product/10235,4006381333931"></textarea>
       <div class="input-alt">
         <label class="upload-btn">
           Upload CSV
@@ -194,14 +199,6 @@
       <p class="settings-intro">Defaults work well for most use cases. Only change these if you have specific needs.</p>
       <div class="settings-grid">
         <div class="setting">
-          <div class="setting-label">ZIP file organization</div>
-          <div class="setting-why">Grouped creates a folder per product. Flat puts all files in one place.</div>
-          <select id="zipOrg" onchange="buildOutputPreview(parsedRows)">
-            <option value="flat">Flat — all files together</option>
-            <option value="grouped" selected>Grouped — folder per product</option>
-          </select>
-        </div>
-        <div class="setting">
           <div class="setting-label">Include IDs in filenames</div>
           <div class="setting-why">Adds EAN and product ID from URL to filenames for easy searching.</div>
           <select id="includeIds" onchange="buildOutputPreview(parsedRows)">
@@ -213,18 +210,18 @@
           <div class="setting-label">Output format</div>
           <div class="setting-why">SVG is vector (scales perfectly for print). PNG is raster (works everywhere).</div>
           <select id="outputFormat" onchange="buildOutputPreview(parsedRows)">
-            <option value="both" selected>SVG + PNG (recommended)</option>
-            <option value="svg">SVG only</option>
+            <option value="both">SVG + PNG</option>
+            <option value="svg" selected>SVG only (recommended)</option>
             <option value="png">PNG only</option>
           </select>
         </div>
         <div class="setting">
-          <div class="setting-label">QR code image size</div>
-          <div class="setting-why">Larger = sharper when printed big. Medium works for most packaging.</div>
+          <div class="setting-label">QR code size</div>
+          <div class="setting-why">SVG is always 30 × 30 mm. Scale only affects PNG resolution.</div>
           <select id="qrScale">
-            <option value="4">Small (~200px)</option>
-            <option value="8" selected>Medium (~400px)</option>
-            <option value="12">Large (~600px)</option>
+            <option value="4">30 × 30 mm · PNG ~200px</option>
+            <option value="8" selected>30 × 30 mm · PNG ~400px</option>
+            <option value="12">30 × 30 mm · PNG ~600px</option>
           </select>
         </div>
         <div class="setting">
@@ -238,12 +235,12 @@
           </select>
         </div>
         <div class="setting">
-          <div class="setting-label">Barcode image size</div>
-          <div class="setting-why">Match to your packaging dimensions. Medium fits most labels.</div>
+          <div class="setting-label">Barcode size</div>
+          <div class="setting-why">SVG is always 37.29 × 13.13 mm (GS1 standard). Scale only affects PNG resolution.</div>
           <select id="eanScale">
-            <option value="2">Small (~200 x 140px)</option>
-            <option value="4" selected>Medium (~400 x 280px)</option>
-            <option value="6">Large (~600 x 420px)</option>
+            <option value="2">37.29 × 13.13 mm · PNG ~200px</option>
+            <option value="4" selected>37.29 × 13.13 mm · PNG ~400px</option>
+            <option value="6">37.29 × 13.13 mm · PNG ~600px</option>
           </select>
         </div>
         <div class="setting">
@@ -276,7 +273,7 @@
 let parsedRows = [];
 
 function loadExample() {
-  const text = 'product_name,qr_data,ean13\nVitamin C Serum,https://example.com/product/10234,5901234123457\nRose Body Oil,https://example.com/product/10235,4006381333931\nHyaluronic Cream,,8588000000128';
+  const text = 'product_name,category,qr_data,ean13\nVitamin C Serum,Skincare,https://example.com/product/10234,5901234123457\nRose Body Oil,Body Care,https://example.com/product/10235,4006381333931\nHyaluronic Cream,Skincare,,8588000000128';
   document.getElementById('csvInput').value = text;
   parseCSV(text);
 }
@@ -308,6 +305,7 @@ function parseCSV(text) {
   const nameCol = headers.find(h => h.includes('name') || h.includes('product'));
   const qrCol = headers.find(h => h.includes('qr') || h.includes('url') || h.includes('link'));
   const eanCol = headers.find(h => h.includes('ean') || h.includes('barcode') || h.includes('gtin'));
+  const catCol = headers.find(h => h.includes('categor') || h.includes('group'));
 
   if (!nameCol) {
     showError('Could not find a product name column. Make sure your first row has a header like "product_name".');
@@ -320,6 +318,7 @@ function parseCSV(text) {
   const nameKey = originalHeaders.find(h => h.trim().toLowerCase() === nameCol);
   const qrKey = qrCol ? originalHeaders.find(h => h.trim().toLowerCase() === qrCol) : null;
   const eanKey = eanCol ? originalHeaders.find(h => h.trim().toLowerCase() === eanCol) : null;
+  const catKey = catCol ? originalHeaders.find(h => h.trim().toLowerCase() === catCol) : null;
 
   const warnings = [];
   parsedRows = rows.map((r, i) => {
@@ -337,7 +336,8 @@ function parseCSV(text) {
       ean = result.ean;
     }
 
-    return { name, qr, ean };
+    const cat = catKey ? (r[catKey] || '').trim() : '';
+    return { name, qr, ean, category: cat };
   }).filter(r => r.name);
 
   parsedRows.forEach((r, i) => {
@@ -368,7 +368,7 @@ function showReview(rows, warnings) {
 
   // Preview table
   const table = document.getElementById('previewTable');
-  let html = '<tr><th>ID</th><th>Product</th><th>QR</th><th>EAN-13</th></tr>';
+  let html = '<tr><th>ID</th><th>Product</th><th>Category</th><th>QR</th><th>EAN-13</th></tr>';
   const showRows = rows.slice(0, 8);
   showRows.forEach((r, i) => {
     const pid = getProductId(r);
@@ -378,10 +378,11 @@ function showReview(rows, warnings) {
     const eanStyle = r.ean && !/^\d{13}$/.test(r.ean) ? ' style="color:#dc2626"' : '';
     const qrCell = r.qr ? '<span style="color:#3b82f6">Yes</span>' : '<span style="color:#ccc">--</span>';
     const eanCell = r.ean ? `<span${eanStyle}>${esc(r.ean)}</span>` : '<span style="color:#ccc">--</span>';
-    html += `<tr><td>${idCell}</td><td>${esc(r.name)}</td><td>${qrCell}</td><td>${eanCell}</td></tr>`;
+    const catCell = r.category ? esc(r.category) : '<span style="color:#ccc">--</span>';
+    html += `<tr><td>${idCell}</td><td>${esc(r.name)}</td><td>${catCell}</td><td>${qrCell}</td><td>${eanCell}</td></tr>`;
   });
   if (rows.length > 8) {
-    html += `<tr><td colspan="4" style="color:#999; text-align:center; font-style:italic;">+ ${rows.length - 8} more products</td></tr>`;
+    html += `<tr><td colspan="5" style="color:#999; text-align:center; font-style:italic;">+ ${rows.length - 8} more products</td></tr>`;
   }
   table.innerHTML = html;
 
@@ -424,33 +425,35 @@ function getFormats() {
 function buildOutputPreview(rows) {
   const container = document.getElementById('outputPreview');
   if (!rows || !rows.length) return;
-  const previewRows = rows.slice(0, 2);
-  const grouped = document.getElementById('zipOrg').value === 'grouped';
+  const previewRows = rows.slice(0, 3);
   const formats = getFormats();
 
+  const dateStr = new Date().toISOString().slice(0, 10);
   let html = '<div class="output-label">Your ZIP will contain</div><div class="file-tree">';
-  html += '<div class="folder">barcodes.zip</div>';
+  html += `<div class="folder">${dateStr}-barcodes/</div>`;
 
+  const groups = {};
   previewRows.forEach(r => {
-    if (grouped) {
-      const pid = getProductId(r);
-      const safe = sanitizeFilename(r.name);
-      const folder = pid ? `${pid}_${safe}` : safe;
-      html += `<div class="folder indent-1">${folder}/</div>`;
-      for (const ext of formats) {
-        if (r.qr) html += `<div class="qr-file indent-2">${buildFilePath(r, 'qr', ext).split('/').pop()}</div>`;
-        if (r.ean && /^\d{13}$/.test(r.ean)) html += `<div class="ean-file indent-2">${buildFilePath(r, 'ean', ext).split('/').pop()}</div>`;
-      }
-    } else {
-      for (const ext of formats) {
-        if (r.qr) html += `<div class="qr-file indent-1">${buildFilePath(r, 'qr', ext)}</div>`;
-        if (r.ean && /^\d{13}$/.test(r.ean)) html += `<div class="ean-file indent-1">${buildFilePath(r, 'ean', ext)}</div>`;
-      }
-    }
+    const cat = r.category || '';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(r);
   });
 
-  if (rows.length > 2) {
-    const remaining = rows.length - 2;
+  Object.entries(groups).forEach(([cat, catRows]) => {
+    if (cat) {
+      html += `<div class="folder indent-1">${sanitizeFilename(cat)}/</div>`;
+    }
+    const fileIndent = cat ? 'indent-2' : 'indent-1';
+    catRows.forEach(r => {
+      for (const ext of formats) {
+        if (r.qr) html += `<div class="qr-file ${fileIndent}">${buildFilePath(r, 'qr', ext).split('/').pop()}</div>`;
+        if (r.ean && /^\d{13}$/.test(r.ean)) html += `<div class="ean-file ${fileIndent}">${buildFilePath(r, 'ean', ext).split('/').pop()}</div>`;
+      }
+    });
+  });
+
+  if (rows.length > 3) {
+    const remaining = rows.length - 3;
     html += `<div class="ellipsis indent-1">... and files for ${remaining} more product${remaining !== 1 ? 's' : ''}</div>`;
   }
 
@@ -482,7 +485,7 @@ function esc(s) {
 }
 
 function sanitizeFilename(name) {
-  return name.replace(/[^a-zA-Z0-9_\-. ]/g, '').replace(/\s+/g, '-').substring(0, 60);
+  return name.replace(/[\/\\:*?"<>|]/g, '').replace(/\s+/g, '-').substring(0, 60);
 }
 
 function extractProductId(url) {
@@ -506,10 +509,9 @@ function getProductId(row) {
 function buildFilePath(row, type, ext) {
   const safeName = sanitizeFilename(row.name);
   const includeIds = document.getElementById('includeIds').value === 'true';
-  const grouped = document.getElementById('zipOrg').value === 'grouped';
   const pid = getProductId(row);
   const suffix = type === 'qr' ? '_qr' : '_ean13';
-  const extension = ext || 'png';
+  const extension = ext || 'svg';
 
   let filename;
   if (includeIds && pid) {
@@ -520,9 +522,8 @@ function buildFilePath(row, type, ext) {
     filename = `${safeName}${suffix}.${extension}`;
   }
 
-  if (grouped) {
-    const folder = pid ? `${pid}_${safeName}` : safeName;
-    return `${folder}/${filename}`;
+  if (row.category) {
+    return `${sanitizeFilename(row.category)}/${filename}`;
   }
   return filename;
 }
@@ -556,6 +557,19 @@ async function renderToCanvas(options) {
   return canvas;
 }
 
+function setSvgSizeMm(svgString, widthMm, heightMm, stretch) {
+  // bwip-js outputs SVG with only viewBox, no width/height — insert mm dimensions
+  let attrs = `width="${widthMm}mm" height="${heightMm}mm" `;
+  // stretch=true uses preserveAspectRatio="none" to fill exact dimensions
+  // (needed for EAN-13 where viewBox ratio differs from GS1 spec dimensions)
+  if (stretch) attrs += 'preserveAspectRatio="none" ';
+  let svg = svgString.replace('<svg ', `<svg ${attrs}`);
+  // bwip-js draws bars as stroked paths without fill="none",
+  // so SVG default fill (black) creates a solid background — fix for transparency
+  svg = svg.replace(/<path stroke="/g, '<path fill="none" stroke="');
+  return svg;
+}
+
 async function generate() {
   const btn = document.getElementById('generateBtn');
   const progressArea = document.getElementById('progressArea');
@@ -567,6 +581,8 @@ async function generate() {
   clearError();
 
   const zip = new JSZip();
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const rootFolder = `${dateStr}-barcodes`;
   const total = parsedRows.filter(r => r.qr || r.ean).length;
   let done = 0;
 
@@ -582,16 +598,16 @@ async function generate() {
           text: row.qr,
           scale: parseInt(document.getElementById('qrScale').value),
           eclevel: document.getElementById('qrEclevel').value,
-          padding: 2,
+          padding: 0,
         };
         if (formats.includes('png')) {
           const canvas = await renderToCanvas(qrOpts);
           const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-          zip.file(buildFilePath(row, 'qr', 'png'), blob);
+          zip.file(`${rootFolder}/${buildFilePath(row, 'qr', 'png')}`, blob);
         }
         if (formats.includes('svg')) {
-          const svg = bwipjs.toSVG(qrOpts);
-          zip.file(buildFilePath(row, 'qr', 'svg'), svg);
+          const svg = setSvgSizeMm(bwipjs.toSVG(qrOpts), 30, 30);
+          zip.file(`${rootFolder}/${buildFilePath(row, 'qr', 'svg')}`, svg);
         }
       }
 
@@ -600,18 +616,18 @@ async function generate() {
           bcid: 'ean13',
           text: row.ean,
           scale: parseInt(document.getElementById('eanScale').value),
-          height: 15,
+          height: 11.4,
           includetext: document.getElementById('eanText').value === 'true',
           textxalign: 'center',
         };
         if (formats.includes('png')) {
           const canvas = await renderToCanvas(eanOpts);
           const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-          zip.file(buildFilePath(row, 'ean', 'png'), blob);
+          zip.file(`${rootFolder}/${buildFilePath(row, 'ean', 'png')}`, blob);
         }
         if (formats.includes('svg')) {
-          const svg = bwipjs.toSVG(eanOpts);
-          zip.file(buildFilePath(row, 'ean', 'svg'), svg);
+          const svg = setSvgSizeMm(bwipjs.toSVG(eanOpts), 37.29, 13.13, true);
+          zip.file(`${rootFolder}/${buildFilePath(row, 'ean', 'svg')}`, svg);
         }
       }
     } catch (err) {
@@ -630,7 +646,7 @@ async function generate() {
   progressText.innerHTML = '<span class="done">Done!</span> Preparing ZIP...';
 
   const content = await zip.generateAsync({ type: 'blob' });
-  saveAs(content, 'barcodes.zip');
+  saveAs(content, `${rootFolder}.zip`);
 
   progressText.innerHTML = '<span class="done">ZIP downloaded</span>';
   btn.disabled = false;
