@@ -156,12 +156,17 @@
           </li>
           <li class="col-item">
             <span class="col-tag optional">optional</span>
+            <span class="col-name">volume</span>
+            <span class="col-explain">Product volume (e.g. "100 ml") — added to filenames to distinguish variants</span>
+          </li>
+          <li class="col-item">
+            <span class="col-tag optional">optional</span>
             <span class="col-name">category</span>
             <span class="col-explain">Groups products into category folders in the ZIP</span>
           </li>
         </ul>
       </div>
-      <textarea id="csvInput" placeholder="product_name,category,qr_data,ean13&#10;Vitamin C Serum,Skincare,https://example.com/product/10234,5901234123457&#10;Rose Body Oil,Body Care,https://example.com/product/10235,4006381333931"></textarea>
+      <textarea id="csvInput" placeholder="product_name,volume,category,qr_data,ean13&#10;Vitamin C Serum,30ml,Skincare,https://example.com/product/10234,5901234123457&#10;Rose Body Oil,100 ml,Body Care,https://example.com/product/10235,4006381333931"></textarea>
       <div class="input-alt">
         <label class="upload-btn">
           Upload CSV
@@ -273,7 +278,7 @@
 let parsedRows = [];
 
 function loadExample() {
-  const text = 'product_name,category,qr_data,ean13\nVitamin C Serum,Skincare,https://example.com/product/10234,5901234123457\nRose Body Oil,Body Care,https://example.com/product/10235,4006381333931\nHyaluronic Cream,Skincare,,8588000000128';
+  const text = 'product_name,volume,category,qr_data,ean13\nVitamin C Serum,30ml,Skincare,https://example.com/product/10234,5901234123457\nRose Body Oil,100 ml,Body Care,https://example.com/product/10235,4006381333931\nHyaluronic Cream,50 ml,Skincare,,8588000000128';
   document.getElementById('csvInput').value = text;
   parseCSV(text);
 }
@@ -306,6 +311,7 @@ function parseCSV(text) {
   const qrCol = headers.find(h => h.includes('qr') || h.includes('url') || h.includes('link'));
   const eanCol = headers.find(h => h.includes('ean') || h.includes('barcode') || h.includes('gtin'));
   const catCol = headers.find(h => h.includes('categor') || h.includes('group'));
+  const volCol = headers.find(h => h.includes('volume') || h.includes('vol') || h === 'size');
 
   if (!nameCol) {
     showError('Could not find a product name column. Make sure your first row has a header like "product_name".');
@@ -319,6 +325,7 @@ function parseCSV(text) {
   const qrKey = qrCol ? originalHeaders.find(h => h.trim().toLowerCase() === qrCol) : null;
   const eanKey = eanCol ? originalHeaders.find(h => h.trim().toLowerCase() === eanCol) : null;
   const catKey = catCol ? originalHeaders.find(h => h.trim().toLowerCase() === catCol) : null;
+  const volKey = volCol ? originalHeaders.find(h => h.trim().toLowerCase() === volCol) : null;
 
   const warnings = [];
   parsedRows = rows.map((r, i) => {
@@ -337,7 +344,8 @@ function parseCSV(text) {
     }
 
     const cat = catKey ? (r[catKey] || '').trim() : '';
-    return { name, qr, ean, category: cat };
+    const vol = volKey ? normalizeVolume((r[volKey] || '').trim()) : '';
+    return { name, qr, ean, category: cat, volume: vol };
   }).filter(r => r.name);
 
   parsedRows.forEach((r, i) => {
@@ -368,7 +376,7 @@ function showReview(rows, warnings) {
 
   // Preview table
   const table = document.getElementById('previewTable');
-  let html = '<tr><th>ID</th><th>Product</th><th>Category</th><th>QR</th><th>EAN-13</th></tr>';
+  let html = '<tr><th>ID</th><th>Product</th><th>Volume</th><th>Category</th><th>QR</th><th>EAN-13</th></tr>';
   const showRows = rows.slice(0, 8);
   showRows.forEach((r, i) => {
     const pid = getProductId(r);
@@ -379,10 +387,11 @@ function showReview(rows, warnings) {
     const qrCell = r.qr ? '<span style="color:#3b82f6">Yes</span>' : '<span style="color:#ccc">--</span>';
     const eanCell = r.ean ? `<span${eanStyle}>${esc(r.ean)}</span>` : '<span style="color:#ccc">--</span>';
     const catCell = r.category ? esc(r.category) : '<span style="color:#ccc">--</span>';
-    html += `<tr><td>${idCell}</td><td>${esc(r.name)}</td><td>${catCell}</td><td>${qrCell}</td><td>${eanCell}</td></tr>`;
+    const volCell = r.volume ? esc(r.volume) : '<span style="color:#ccc">--</span>';
+    html += `<tr><td>${idCell}</td><td>${esc(r.name)}</td><td>${volCell}</td><td>${catCell}</td><td>${qrCell}</td><td>${eanCell}</td></tr>`;
   });
   if (rows.length > 8) {
-    html += `<tr><td colspan="5" style="color:#999; text-align:center; font-style:italic;">+ ${rows.length - 8} more products</td></tr>`;
+    html += `<tr><td colspan="6" style="color:#999; text-align:center; font-style:italic;">+ ${rows.length - 8} more products</td></tr>`;
   }
   table.innerHTML = html;
 
@@ -506,20 +515,27 @@ function getProductId(row) {
   return '';
 }
 
+function normalizeVolume(raw) {
+  if (!raw) return '';
+  // Normalize common formats: "100 ml", "100ml", "100ML", "100 ML" → "100ml"
+  return raw.replace(/\s+/g, '').toLowerCase();
+}
+
 function buildFilePath(row, type, ext) {
   const safeName = sanitizeFilename(row.name);
   const includeIds = document.getElementById('includeIds').value === 'true';
   const pid = getProductId(row);
   const suffix = type === 'qr' ? '_qr' : '_ean13';
   const extension = ext || 'svg';
+  const volPart = row.volume ? `_${sanitizeFilename(row.volume)}` : '';
 
   let filename;
   if (includeIds && pid) {
-    filename = `${pid}_${safeName}${suffix}.${extension}`;
+    filename = `${pid}_${safeName}${volPart}${suffix}.${extension}`;
   } else if (includeIds && type === 'ean' && row.ean) {
-    filename = `${row.ean}_${safeName}${suffix}.${extension}`;
+    filename = `${row.ean}_${safeName}${volPart}${suffix}.${extension}`;
   } else {
-    filename = `${safeName}${suffix}.${extension}`;
+    filename = `${safeName}${volPart}${suffix}.${extension}`;
   }
 
   if (row.category) {
