@@ -577,9 +577,25 @@ function setSvgSizeMm(svgString, widthMm, heightMm, stretch) {
   // (needed for EAN-13 where viewBox ratio differs from GS1 spec dimensions)
   if (stretch) attrs += 'preserveAspectRatio="none" ';
   let svg = svgString.replace('<svg ', `<svg ${attrs}`);
-  // bwip-js draws bars as stroked paths without fill="none",
-  // so SVG default fill (black) creates a solid background — fix for transparency
-  svg = svg.replace(/<path stroke="/g, '<path fill="none" stroke="');
+  // bwip-js draws bars as stroked vertical lines grouped into <path> elements.
+  // Design software (Illustrator, CorelDRAW) needs filled shapes ("outlined" strokes).
+  // Convert each stroked path into individual filled rectangles.
+  svg = svg.replace(
+    /<path\s+stroke="([^"]+)"\s+stroke-width="([^"]+)"\s+d="([^"]+)"\s*\/>/g,
+    (_, color, sw, d) => {
+      const w = parseFloat(sw);
+      const rects = [];
+      const re = /M([0-9.]+)\s+([0-9.]+)L([0-9.]+)\s+([0-9.]+)/g;
+      let m;
+      while ((m = re.exec(d)) !== null) {
+        const x = parseFloat(m[1]);
+        const startY = Math.min(parseFloat(m[2]), parseFloat(m[4]));
+        const h = Math.abs(parseFloat(m[4]) - parseFloat(m[2]));
+        rects.push(`<rect x="${(x - w/2).toFixed(2)}" y="${startY.toFixed(2)}" width="${w}" height="${h.toFixed(2)}" fill="${color}"/>`);
+      }
+      return rects.join('\n');
+    }
+  );
   return svg;
 }
 
@@ -631,7 +647,6 @@ async function generate() {
           scale: parseInt(document.getElementById('eanScale').value),
           height: 11.4,
           includetext: document.getElementById('eanText').value === 'true',
-          textxalign: 'center',
         };
         if (formats.includes('png')) {
           const canvas = await renderToCanvas(eanOpts);
